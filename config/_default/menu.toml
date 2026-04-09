@@ -1,0 +1,34 @@
+# Configure main menu and social menu
+# [[main]]
+# identifier = "home"
+# name = "Home"
+# url = "/"
+#[main.params]
+#icon = "home"
+#newtab = true
+# [[main]]
+#     name = "Home"
+#     url = "/"
+#     weight = 10
+#     identifier = "home"
+#     [main.params]
+#         icon = "home"
+#         newTab = true
+    
+[[social]]
+    identifier = "github"
+    name       = "GitHub"
+    url        = "https://github.com/laminowany"
+
+    [social.params]
+        icon = "brand-github"
+        
+[[social]]
+    identifier = "linkedin"
+    name       = "LinkedIn"
+    url        = "https://www.linkedin.com/in/piotr-wiercinski"
+
+    [social.params]
+        icon = "brand-linkedin"
+
+

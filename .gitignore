@@ -1,0 +1,18 @@
+# Skompilowane pliki (to, co idzie na serwer)
+/public/
+/resources/_gen/
+
+# Logi i pliki tymczasowe
+hugo_stats.json
+assets/jsconfig.json
+.hugo_build.temp
+
+# Cache i śmieci systemowe
+.DS_Store
+Thumbs.db
+
+# Pliki Go (jeśli używałeś modułów, ale teraz masz je w /themes)
+/bin/
+/pkg/
+go.sum
+# go.mod możesz zostawić, jeśli chcesz, ale przy folderze /themes nie jest niezbędny
