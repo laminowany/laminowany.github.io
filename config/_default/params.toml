@@ -52,5 +52,20 @@ SortBy              = "default"
     enabled  = true
     provider = "giscus"
 
+    [comments.giscus]
+        repo             = "laminowany/laminowany.github.io"
+        repoID           = "R_kgDOR-YeVg"
+        category         = "General"
+        categoryID       = "DIC_kwDOR-YeVs4C6xog"
+        mapping          = "pathname"
+        lightTheme       = "light"
+        darkTheme        = "dark_dimmed"
+        reactionsEnabled = 1
+        emitMetadata     = 0
+        inputPosition    = "top"
+        lang             = "en"
+        strict           = 0
+        loading          = "lazy"
+
     # See all the available configurations at https://github.com/CaiJimmy/hugo-theme-stack/blob/master/config/_default/params.toml
     # Copy the configurations you need from there and paste it here.
