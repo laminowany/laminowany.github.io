@@ -3,6 +3,9 @@ title: Navigating `pmap` output
 description: Making sense of whatever `pmap` spits at you
 date: 2026-04-05T23:12:06+02:00
 image: cover.png
+tags:
+    - linux
+    - process
 ---
 
 Regardless of whether you need to analyze your process memory with `pmap` or you just enjoy staring at its output in your free time, it's definitely helpful being able to understand its output.
