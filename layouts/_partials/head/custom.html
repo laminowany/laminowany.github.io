@@ -1,3 +1,5 @@
 {{- if hugo.IsProduction -}}
 <script defer src="https://cloud.umami.is/script.js" data-website-id="cf1f2cdf-b1da-48cb-b856-a828be0af5a1"></script>
 {{- end -}}
+{{ template "_internal/opengraph.html" . }}
+{{ template "_internal/twitter_cards.html" . }}
