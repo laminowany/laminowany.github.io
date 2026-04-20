@@ -22,10 +22,9 @@ Okay, let's see what the standard says about *moved-from* objects:
 
 > source: https://eel.is/c++draft/lib.types.movedfrom
 
-### Validity of an object
-
 Standard says: "unless otherwise specified, they are in valid but unspecified state".
 But what exactly does it mean? How can an object be in a valid and unspecified state at the same time? 
+
 In another place it's well explained:
 
 ![](standard2.png)
@@ -44,18 +43,18 @@ What are those cases when "something else" is specified?
 ### std::unique_ptr
 
 There are a lot of cases when class author specifies the state of moved-from objects, but let's give a couple of examples from the C++ Standard Library.
-One of the most notable ones is `std::unique_ptr`. The standard specifies behaviour of its move constructor as follows:
+One of the most notable ones is `std::unique_ptr`. The standard specifies behavior of its move constructor as follows:
 
 ![](standard3.png)
 
 > source: https://eel.is/c++draft/unique.ptr#single.ctor-15
 
 This move constructor refers to its source object by `u`, and its postcondition specifies that calling `u.get()` will yield `nullptr`.
-Therefore the state of *moved-from* object of type `std::unique_ptr` is specified.
+Therefore the state of *moved-from* object of type `std::unique_ptr` is **specified**.
 
 ### std::thread
 
-Another such example is `std::thread`. Its documentation says:
+Another such example is `std::thread`:
 
 ![](standard4.png)
 
@@ -70,15 +69,15 @@ Standard explains it at another place:
 
 > source: https://eel.is/c++draft/thread.thread.id#5
 
-Which basically means that if you have an object of type `thread::id` which has id equal to `id()`, then it's not connected to any underlying thread of execution.
+Which basically means that if you have an object of type `thread::id` which has its `id` equal to `id()`, then it's not connected to any underlying thread of execution.
 Which together with previous paragraph means that *moved-from* `std::thread` is not associated with any underlying thread.
-Therefore the state of *moved-from* object of type `std::thread` is specified.
+Therefore the state of *moved-from* object of type `std::thread` is **specified**.
 
-To sum up: the general rule for standard library types is that after moving they are in valid but unspecified state, unless their post-move state is explicitly specified like in case of `std:unique_ptr` or `std::thread`. The "valid but unspecified state" is a library-level guarantee and does not apply as a general language rule to all user-defined types.
+To sum up: the general rule is that *moved-from* objects are in valid but unspecified state, unless their post-move state is explicitly specified like in case of `std:unique_ptr` or `std::thread`.
 
-But I said in the beginning that *moved-from* objects are NOT in "valid but unspecified" states. So what's the deal?
+But I said in the beginning that *moved-from* objects are NOT in "valid but unspecified" state. So what's the deal?
 
-## Rule for "moved-from" state
+## Rule for "moved-from" objects
 
 Let's look at the my first citation from standard, along with some hints:
 
@@ -86,18 +85,22 @@ Let's look at the my first citation from standard, along with some hints:
 
 Do you see it now? The rule about "valid but unspecified state" only refers to types from the C++ standard library.
 
-Does the standard say anything about types outside of standard library? It does not. Therefore I might now answer the question from the title: **the state of moved-from object is not specified by standard and it fully depends on the class author** (take care that the object is still valid lifetime-wise).
+Does the standard say anything about types outside of standard library? It does not. Therefore I might now answer the question from the title: **the state of moved-from object is not specified by standard and it fully depends on the class author**.
+
+Note that such objects are still alive in the sense that their lifetime has not ended.
 
 ## Practicalities
 
 The standard is one thing, writing sensible C++ and following good practices is another.
 And while it's true that your *moved-from* state can be whatever you want, there are some requirements if you need to use your type inside the C++ standard library. 
 
-For example `std::vector` requires that your type is `Erasable`. This means that its destructor should run just fine. If your move constructor breaks type invariants for the destructor, then the type is not `Erasable`.
+For example `std::vector` requires that your type is `Erasable`. This means that its destructor should run just fine, without any *undefined behavior*. If a move constructor leaves the object in a state where its destruction would result in *undefined behavior*, then the type does not satisfy `Erasable`.
 
-There are also more restrictions for specific member functions of `std::vector`, so while the language does not limit what the state of your *moved-from* object should be, there might be some extra requirements when using an object of your type in containers. 
+There are also more restrictions for specific member functions of `std::vector`. While the language does not constrain the *moved-from* state of objects, using them in standard containers may impose additional requirement. For example `std::vector<T>::erase()` requires `T` to be *MoveAssignable*.
 
-I often see this phrase "valid but unspecified" state being thrown arround like it was an universal rule. I think this is some overgeneralization and it's not necessarily correct.
+## Common misconceptions
+
+I often see this phrase "valid but unspecified state"  being thrown around like it was an universal rule. I think this is some overgeneralization and it's not necessarily correct.
 
 For example: **Raymond Chen** in his blog ["What should the state of a moved-from object be?"](https://devblogs.microsoft.com/oldnewthing/20201218-00/?p=104558) says:
 
@@ -116,10 +119,10 @@ I have only respect and love for these guys (as for every other human being), bu
 
 Last but not least. The performance cost of move in C++.
 
-When you are implementing a move operation in your programming language you face a choice: destructive move vs non-destructive move.
+When defining move semantics, you face a choice: *destructive* move vs *non-destructive* move.
 *Destructive* move means that the source objects is destroyed and you are not allowed to have fun with it anymore, while *non-destructive* move leaves the source in some state. 
 
-Rust chooses the destructive move, while C++ went the other way. What is the performance cost of `non-destructive` move? It obviously depends on specific type, but lets talk about STL.
+Rust chooses the **destructive** move, while C++ went the other way. What is the performance cost of **non-destructive** move? It obviously depends on specific type, but lets talk about STL.
 
 ### std::vector
 
@@ -145,7 +148,7 @@ _LIBCPP_CONSTEXPR_SINCE_CXX20 inline _LIBCPP_HIDE_FROM_ABI vector<_Tp, _Allocato
 
 There are three pointers being reset to `nullptr`. You may say: "ok, it's not a big performance hit, I can live with that".
 
-Fasten your seatbelts because we are going on a trip to another container.
+Okey dokey, fasten your seatbelts because we are going on a trip to another container.
 
 ### std::list
 
@@ -162,7 +165,7 @@ _LIBCPP_CONSTEXPR_SINCE_CXX26 inline list<_Tp, _Alloc>::list(list&& __c) noexcep
 
 > source: https://github.com/llvm/llvm-project/blob/eff4d473c3fc4efd21136f818933b443de7817a6/libcxx/include/list#L1128
 
-Function splice is defined as such:
+Function `splice()` is defined as such:
 
 ```c++  {linenos=true}
 template <class _Tp, class _Alloc>
@@ -182,14 +185,26 @@ _LIBCPP_CONSTEXPR_SINCE_CXX26 void list<_Tp, _Alloc>::splice(const_iterator __p,
 
 > source: https://github.com/llvm/llvm-project/blob/94482e8a6791930fe438537e0376247bbfac16cf/libcxx/include/list#L1498
 
-As you can see the move constructor of `std::list` is not that trivial, it requires a couple of helper functions and preserving invariant of `std::list` requires leaving a *sentinel* node behind in a valid state (which is finally done by `__unlink_nodes` in line 8 of the last code snippet).
+As you can see the move constructor of `std::list` is not that trivial, it requires a couple of helper functions and preserving invariant of `std::list` requires leaving a *sentinel* node behind in a valid state, which is finally done by `__unlink_nodes` in line 8:
+
+```c++
+template <class _Tp, class _Alloc>
+_LIBCPP_CONSTEXPR_SINCE_CXX26 inline void
+__list_imp<_Tp, _Alloc>::__unlink_nodes(__base_pointer __f, __base_pointer __l) _NOEXCEPT {
+  __f->__prev_->__next_ = __l->__next_;
+  __l->__next_->__prev_ = __f->__prev_;
+}
+```
+
+> source: https://github.com/llvm/llvm-project/blob/94482e8a6791930fe438537e0376247bbfac16cf/libcxx/include/list#L601
 
 My point is that for some types the move constructor may require non-trivial logic, and preserving object invariants always comes at a cost.
 
-"Ok, so why the C++ does not implement the destructive move?" - you might ask. The answer is simple: inheritance. If you have a hierarchy of classes you can neither move the base class before the derived class, nor the derived class before the base class because you will always end up with one object having derived part already constructed, but not yet constructed base class. This problem was also discussed in [A Proposal to Add Move Semantics Support to the C++ Language](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2002/n1377.htm).
+"Ok, so why the C++ does not implement the destructive move?" - you might ask. The answer is simple: inheritance. If you have a hierarchy of classes you can neither move the base class before the derived class, nor the derived class before the base class because you will always end up with one object having derived part already constructed, but not yet constructed base part. This problem was also discussed in [A Proposal to Add Move Semantics Support to the C++ Language](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2002/n1377.htm).
 
 So how does Rust manage to have a destructive move? You guessed it right, by not having inheritance. A truly outstanding move.
 
 ## Conclusions
 
 The C++ standard does not define semantic state for moved-from objects for user-defined types. It only says that object has still valid lifetime.
+The “valid but unspecified state” is a library-level guarantee and does not apply as a general language rule to all user-defined types.
