@@ -2,7 +2,7 @@
 title: Navigating `pmap` output
 description: Making sense of whatever `pmap` spits at you
 date: 2026-04-05T23:12:06+02:00
-image: cover.png
+image: https://www.laminowany.dev/p/pmap-output/cover.png
 tags:
     - linux
     - process

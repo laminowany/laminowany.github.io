@@ -2,7 +2,7 @@
 title: State of `moved-from` objects in C++
 description: What can you do with `moved-from` objects and why non-destructive moves are actually destructive (for performance)
 date: 2026-04-14T22:10:43+02:00
-image: cover.png
+image: https://www.laminowany.dev/p/state-of-moved-from-objects-in-c/cover.png
 tags:
     - cpp
     - performance
