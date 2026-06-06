@@ -1,0 +1,98 @@
+---
+title: "Why setting rpath does not set rpath"
+description: How your linker is deciding what is best for you
+image: cover.png
+draft: true
+date: 2026-06-05T19:03:34+02:00
+tags:
+    - linux
+    - linking
+---
+
+If you ever dabbled with dynamic linking in Linux and needed to specify where the dynamic loader (ld-linux.so) should look for shared libraries, you probably used
+either `LD_LIBRARY_PATH` environment variable or you set `RPATH` directly in your binaries. So did I. But to me surprise it no longer works as it used to.
+
+## How it used to work
+
+Quick recap: when dynamic loader is loading your executable and it's trying to load its dynamic dependencies, it needs to know where to look for them.
+
+By default it searches at system-wide paths like `/lib` and `/usr/lib`. This can be overridden by setting `LD_LIBRARY_PATH` environment variable, which will take priority.
+But sometimes you need to engrain the path to shared libraries inside the binary, and don't depend on environmental settings.
+
+Then `RPATH` comes to the rescue. It's an entry in executable binary, which takes the precedence over both default systems path as well as `LD_LIBRARY_PATH` env var.
+As a linker flag it's being set by `-Wl,-rpath,<PATH>`.
+It's a part of binary, it's always there, it does not depend on external settings.
+
+So the order of lookup was:
+1. Default paths (`/lib`, `/usr/lib`)
+2. Path set by environment variable `LD_LIBRARY_PATH`
+3. Path written into binary as `RPATH` entry
+
+To be pedantic it's a little bit more complex than that, you can read details here: [ld-linux.so - Linux manual page](https://man7.org/linux/man-pages/man8/ld.so.8.html)
+
+But recently I tried to used `-rpath` and to my surprise it did not work as expected.
+
+## Not today...
+
+I had a simple program depending on the Qt framework which itself consists of many shared libraries. I had multiple versions of Qt on my machine, and to link with specific one I first used `LD_LIBRARY_PATH`. Everything worked. As expected.
+
+Until I tried to override `LD_LIBRARY_PATH` by `RPATH`. I set the flag in CMake as such:
+
+```cmake
+target_link_options(app PRIVATE
+    "-Wl,-rpath,/home/Qt/dev"
+)
+```
+
+But to my surprise the old version of Qt, (the one from  `LD_LIBRARY_PATH`), is still being used. I rebuilt twice. Still the same.
+I ditch the CMake and try calling compiler directly, first **clang**, then **gcc**. It stills does not give me expected effect.
+
+Okay, the next step is to look into binary directly. Setting `rpath` flag should put the PATH into binary and I should be able to check it by tools like **readelf**.
+Passing `-d` to **readelf** should show me all information related to **d**ynamic linking.
+```sh
+$ readelf app -d | grep -E "RPATH" 
+
+<NO OUTPUT>
+```
+
+The next step is to bet on **grep** not working correctly. I list entire dynamic section:
+```sh
+$ readelf app -d 
+
+
+Dynamic section at offset 0x2da0 contains 30 entries:
+  Tag        Type                         Name/Value
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x000000000000001d (RUNPATH)            Library runpath: [/home/Qt/dev]
+ 0x000000000000000c (INIT)               0x1000
+ 0x000000000000000d (FINI)               0x11dc
+ 0x0000000000000019 (INIT_ARRAY)         0x3d88
+ 0x000000000000001b (INIT_ARRAYSZ)       16 (bytes)
+ 0x000000000000001a (FINI_ARRAY)         0x3d98
+ 0x000000000000001c (FINI_ARRAYSZ)       8 (bytes)
+ 0x000000006ffffef5 (GNU_HASH)           0x3a0
+ 0x0000000000000005 (STRTAB)             0x500
+ 0x0000000000000006 (SYMTAB)             0x3c8
+ 0x000000000000000a (STRSZ)              403 (bytes)
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000015 (DEBUG)              0x0
+ 0x0000000000000003 (PLTGOT)             0x4000
+ 0x0000000000000002 (PLTRELSZ)           96 (bytes)
+ 0x0000000000000014 (PLTREL)             RELA
+ 0x0000000000000017 (JMPREL)             0x820
+ 0x0000000000000007 (RELA)               0x700
+ 0x0000000000000008 (RELASZ)             288 (bytes)
+ 0x0000000000000009 (RELAENT)            24 (bytes)
+ 0x000000006ffffffb (FLAGS_1)            Flags: PIE
+ 0x000000006ffffffe (VERNEED)            0x6b0
+ 0x000000006fffffff (VERNEEDNUM)         2
+ 0x000000006ffffff0 (VERSYM)             0x694
+ 0x000000006ffffff9 (RELACOUNT)          4
+ 0x0000000000000000 (NULL)               0x0
+```
+
+
+## How it "works" now
