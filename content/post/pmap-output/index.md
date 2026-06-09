@@ -1,5 +1,5 @@
 ---
-title: Navigating `pmap` output
+title: Navigating `pmap` Output
 description: Making sense of whatever `pmap` spits at you
 date: 2026-04-05T23:12:06+02:00
 image: cover.png

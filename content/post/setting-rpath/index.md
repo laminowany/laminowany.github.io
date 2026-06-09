@@ -1,8 +1,7 @@
 ---
-title: "Why setting rpath does not set rpath"
-description: How your linker is deciding what is best for you
+title: "Why Setting RPATH Doesn't Actually Set RPATH"
+description: How your linker thinks it knows better than you
 image: cover.png
-draft: true
 date: 2026-06-05T19:03:34+02:00
 tags:
     - linux
@@ -10,33 +9,33 @@ tags:
 ---
 
 If you ever dabbled with dynamic linking in Linux and needed to specify where the dynamic loader (ld-linux.so) should look for shared libraries, you probably used
-either `LD_LIBRARY_PATH` environment variable or you set `RPATH` directly in your binaries. So did I. But to me surprise it no longer works as it used to.
+either the  `LD_LIBRARY_PATH` environment variable or set `RPATH` directly in your binaries. So did I. But to my surprise it no longer works as it used to.
 
-## How it used to work
+## How I thought it always worked
 
-Quick recap: when dynamic loader is loading your executable and it's trying to load its dynamic dependencies, it needs to know where to look for them.
+Quick recap: when the dynamic loader loads your executable and tries to resolve its dynamic dependencies, it needs to know where to look for them.
 
-By default it searches at system-wide paths like `/lib` and `/usr/lib`. This can be overridden by setting `LD_LIBRARY_PATH` environment variable, which will take priority.
-But sometimes you need to engrain the path to shared libraries inside the binary, and don't depend on environmental settings.
+By default, it searches system-wide paths like `/lib` and `/usr/lib`. This can be overridden by setting the `LD_LIBRARY_PATH` environment variable, which takes precedence.
+But sometimes you need to embed the path to shared libraries inside the binary, and not depend on environment settings.
 
-Then `RPATH` comes to the rescue. It's an entry in executable binary, which takes the precedence over both default systems path as well as `LD_LIBRARY_PATH` env var.
-As a linker flag it's being set by `-Wl,-rpath,<PATH>`.
-It's a part of binary, it's always there, it does not depend on external settings.
+Then `RPATH` comes to the rescue. It's an entry in executable binary, which takes precedence over both default systems paths as well as the `LD_LIBRARY_PATH` environment variable.
+As a linker flag, it is set using `-Wl,-rpath,<PATH>`.
+It's part of binary, it's always there, it does not depend on external settings.
 
-So the order of lookup was:
-1. Default paths (`/lib`, `/usr/lib`)
+So the order of lookup is:
+1. Path written into the binary as an `RPATH` entry
 2. Path set by environment variable `LD_LIBRARY_PATH`
-3. Path written into binary as `RPATH` entry
+3. Default paths (`/lib`, `/usr/lib`)
 
-To be pedantic it's a little bit more complex than that, you can read details here: [ld-linux.so - Linux manual page](https://man7.org/linux/man-pages/man8/ld.so.8.html)
+But recently I tried to use `-rpath` and to my surprise it did not work as expected.
 
-But recently I tried to used `-rpath` and to my surprise it did not work as expected.
+> To be pedantic: order of looking for shared libraries is a little bit more complex than that, you can read details here: [ld-linux.so - Linux manual page](https://man7.org/linux/man-pages/man8/ld.so.8.html)
 
 ## Not today...
 
-I had a simple program depending on the Qt framework which itself consists of many shared libraries. I had multiple versions of Qt on my machine, and to link with specific one I first used `LD_LIBRARY_PATH`. Everything worked. As expected.
+I had a simple program depending on the Qt framework which consists of many shared libraries. I had multiple versions of Qt installed on my machine, and to link against a specific one, I first used `LD_LIBRARY_PATH`. Everything worked. As expected.
 
-Until I tried to override `LD_LIBRARY_PATH` by `RPATH`. I set the flag in CMake as such:
+Until I tried to override `LD_LIBRARY_PATH` with `RPATH`. I set the flag in CMake as such:
 
 ```cmake
 target_link_options(app PRIVATE
@@ -44,29 +43,27 @@ target_link_options(app PRIVATE
 )
 ```
 
-But to my surprise the old version of Qt, (the one from  `LD_LIBRARY_PATH`), is still being used. I rebuilt twice. Still the same.
-I ditch the CMake and try calling compiler directly, first **clang**, then **gcc**. It stills does not give me expected effect.
+But to my surprise, the old version of Qt (the one from  `LD_LIBRARY_PATH`), was still being used. I rebuilt twice. Still the same.
+I ditched the CMake and tried calling the compiler directly. It still did not give me the expected effect.
 
-Okay, the next step is to look into binary directly. Setting `rpath` flag should put the PATH into binary and I should be able to check it by tools like **readelf**.
-Passing `-d` to **readelf** should show me all information related to **d**ynamic linking.
+Okay, the next step is to look into the binary directly. Setting `rpath` flag should embed the path into the binary and I should be able to check it by tools like `readelf`.
+Passing `-d` to `readelf` should show me information related to **D**ynamic linking.
 ```sh
 $ readelf app -d | grep -E "RPATH" 
 
 <NO OUTPUT>
 ```
 
-The next step is to bet on **grep** not working correctly. I list entire dynamic section:
-```sh
-$ readelf app -d 
+Nothing is there? But how can that be if I just set it?
 
+The next step is to bet on `grep` not working correctly. I list entire dynamic section:
+```diff
+$ readelf app -d 
 
 Dynamic section at offset 0x2da0 contains 30 entries:
   Tag        Type                         Name/Value
- 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
- 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
- 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
- 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
- 0x000000000000001d (RUNPATH)            Library runpath: [/home/Qt/dev]
+ 0x0000000000000001 (NEEDED)             (...)
++0x000000000000001d (RUNPATH)            Library runpath: [/home/Qt/dev]
  0x000000000000000c (INIT)               0x1000
  0x000000000000000d (FINI)               0x11dc
  0x0000000000000019 (INIT_ARRAY)         0x3d88
@@ -94,5 +91,47 @@ Dynamic section at offset 0x2da0 contains 30 entries:
  0x0000000000000000 (NULL)               0x0
 ```
 
+And while I can see that there is no `RPATH` entry, there is a `RUNPATH` entry with the value I passed via the `-rpath` flag.
+What exactly is happening?
 
-## How it "works" now
+## How it actually works
+
+What is the difference between them two?
+So while the `RPATH` is a path where to look for shared libraries, `RUNPATH` is similar but less aggressive.
+
+Two differences are:
+1. `RUNPATH` has lower priority than `LD_LIBRARY_PATH` environment variable. This is contrary to `RPATH` priority.
+2. `RPATH` is inherited across the dependency resolution - if your application **A** uses `RPATH` to look for dependency **B**, then **B** can use this `RPATH` as well to look for its own dependencies. `RUNPATH` does not exhibit this behavior.
+
+So the ACTUAL order of lookup is:
+1. Path written into binary as `RPATH` entry (if `RUNPATH` does not exist)
+2. Path set by environment variable `LD_LIBRARY_PATH`
+3. Path written into binary as `RUNPATH` entry
+4. Default paths (`/lib`, `/usr/lib`)
+
+What was not working for me: first I set the `LD_LIBRARY_PATH` environment variable, and then I tried overriding it with `RPATH`.
+But instead of setting `RPATH` I ended up with a `RUNPATH` entry which has lower priority than `LD_LIBRARY_PATH`.
+As a result the shared libraries were still being loaded from `LD_LIBRARY_PATH` environment variable.
+
+Case closed.
+
+But why did the linker actually set the `RUNPATH` when I explicitly told him to emit `RPATH` using the `-rpath` flag?
+
+Well, this behavior has existed for a long time.
+> (since 2013 actually - https://sourceware.org/pipermail/binutils/2013-January/079988.html)
+
+If you want to emit actual `RPATH` you also need to set `--disable-new-dtags` flag.
+This instructs the linker to use the "old" behavior of emitting `RPATH` when being asked to emit the damn `RPATH`.
+
+Why did I hit this case now? This must have been the only time when I had the `LD_LIBRARY_PATH` environment variable set in the terminal,
+from which I launched my dynamically linked application. Possibly the linker was emitting `RUNPATH` every single time and just did not realize it,
+because there was not a `LD_LIBRARY_PATH` set to override it.
+
+Well, the lesson learnt.
+
+## Extra
+
+Both `RPATH` and `RUNPATH` can take a special token - `$ORIGIN` , which is resolved at runtime to the directory containing the executable.
+This is useful when deploying applications with shared dependencies as you can set `RUNPATH` to `$ORIGIN/lib` and copy the dependencies along.
+It also makes the program relocatable, as long as it is moved alongside its shared dependencies.
+This approach is commonly used in bundled application distributions, such as the Qt framework.
